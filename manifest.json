@@ -1,0 +1,23 @@
+{
+  "name": "Afinador JR",
+  "short_name": "Afinador",
+  "description": "Afinador de violão com detecção automática via microfone",
+  "start_url": "/afinadorjrteste/",
+  "scope": "/afinadorjrteste/",
+  "display": "standalone",
+  "background_color": "#0a0a14",
+  "theme_color": "#0a0a14",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
