@@ -3,6 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    
+    <!-- CRUCIAL PARA GITHUB PAGES: Permite o uso de sensores -->
+    <meta http-equiv="Permissions-Policy" content="magnetometer=(self), accelerometer=(self)">
+    
     <title>Detector de Metais Web</title>
     <style>
         :root {
@@ -27,21 +31,20 @@
             flex-direction: column;
             align-items: center;
             overflow: hidden;
-            touch-action: none; /* Impede zoom/scroll */
+            touch-action: none;
         }
 
-        /* Cabeçalho */
         header {
             width: 100%;
             padding: 15px;
             text-align: center;
             border-bottom: 1px solid var(--border);
             background: rgba(14, 18, 29, 0.9);
+            z-index: 20;
         }
         h1 { margin: 0; font-size: 1.2rem; color: var(--accent); letter-spacing: 1px; }
         .status-bar { font-size: 0.8rem; color: var(--dim); margin-top: 5px; }
 
-        /* Área Principal */
         main {
             flex: 1;
             display: flex;
@@ -51,7 +54,6 @@
             width: 100%;
         }
 
-        /* Radar / Bússola */
         #radar-container {
             position: relative;
             width: 320px;
@@ -63,7 +65,6 @@
             transition: border-color 0.3s;
         }
 
-        /* Anéis concêntricos */
         .ring {
             position: absolute;
             top: 50%; left: 50%;
@@ -75,7 +76,6 @@
         .r2 { width: 50%; height: 50%; }
         .r3 { width: 75%; height: 75%; }
 
-        /* Cursor */
         #cursor {
             position: absolute;
             top: 50%; left: 50%;
@@ -88,7 +88,6 @@
             z-index: 10;
         }
         
-        /* Mira do cursor */
         #cursor::after {
             content: '';
             position: absolute;
@@ -99,7 +98,6 @@
             transform: translate(-50%, -50%);
         }
 
-        /* Botões do Anel */
         .ring-btn {
             position: absolute;
             width: 50px; height: 50px;
@@ -122,9 +120,7 @@
             box-shadow: 0 0 15px var(--accent);
             transform: scale(1.1);
         }
-        .ring-btn:hover { border-color: var(--accent); }
 
-        /* Controles Inferiores */
         .controls {
             width: 100%;
             padding: 20px;
@@ -134,6 +130,7 @@
             flex-direction: column;
             gap: 15px;
             box-sizing: border-box;
+            z-index: 20;
         }
 
         .info-display {
@@ -163,11 +160,10 @@
             color: var(--dim);
         }
 
-        /* Overlay de Permissão */
         #permission-overlay {
             position: fixed;
             top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.9);
+            background: rgba(0,0,0,0.95);
             z-index: 100;
             display: flex;
             flex-direction: column;
@@ -177,6 +173,7 @@
             padding: 20px;
         }
         #permission-overlay p { max-width: 300px; margin-bottom: 20px; line-height: 1.5; }
+        .warning-text { color: var(--warn); font-size: 0.9rem; margin-top: 10px; }
 
     </style>
 </head>
@@ -193,7 +190,6 @@
             <div class="ring r2"></div>
             <div class="ring r3"></div>
             <div id="cursor"></div>
-            <!-- Botões serão gerados via JS -->
         </div>
     </main>
 
@@ -201,21 +197,18 @@
         <div class="info-display" id="intensity-val">0 µT</div>
         <div class="settings">
             <span>Sensibilidade: <input type="range" id="sens-slider" min="1" max="10" value="3"></span>
-            <span id="mode-text">Modo: Normal</span>
         </div>
         <button class="action-btn" id="btn-calibrate">Recalibrar Base</button>
     </div>
 
-    <!-- Overlay Inicial -->
     <div id="permission-overlay">
         <h2 style="color: var(--accent)">Atenção</h2>
-        <p>Para detectar metais, este app precisa acessar o <strong>Magnetômetro</strong> do seu celular.</p>
-        <p>O Chrome solicitará permissão na próxima tela.</p>
+        <p>Para detectar metais, este app precisa acessar os sensores do seu celular.</p>
         <button class="action-btn" onclick="startSensors()">ATIVAR SENSOR</button>
+        <p class="warning-text">Nota: Certifique-se de estar usando HTTPS (GitHub Pages)</p>
     </div>
 
     <script>
-        // --- Configurações ---
         const buttonsConfig = [
             { icon: "⚙", label: "Config" },
             { icon: "📡", label: "Teste" },
@@ -228,19 +221,13 @@
         ];
 
         let magnetometer;
-        let accelerometer;
         let isRunning = false;
-        
-        // Calibração
         let baseX = 0, baseY = 0, baseZ = 0;
         let isCalibrated = false;
-        
-        // Estado
         let currentIntensity = 0;
         let sensitivity = 3.0;
-        let activeBtnIndex = -1;
+        let useFallback = false; // Se true, usa DeviceOrientation
 
-        // Elementos DOM
         const cursor = document.getElementById('cursor');
         const radar = document.getElementById('radar-container');
         const intensityDisplay = document.getElementById('intensity-val');
@@ -249,10 +236,9 @@
         const btnCalibrate = document.getElementById('btn-calibrate');
         const sensSlider = document.getElementById('sens-slider');
 
-        // --- Inicialização dos Botões em Anel ---
         function initButtons() {
-            const radius = 140; // Raio do anel
-            const centerX = 160; // Metade do container (320px)
+            const radius = 140;
+            const centerX = 160;
             const centerY = 160;
 
             buttonsConfig.forEach((btn, index) => {
@@ -261,93 +247,124 @@
                 el.innerHTML = btn.icon;
                 el.title = btn.label;
                 
-                // Posicionamento trigonométrico
-                const angle = (index * (360 / buttonsConfig.length)) - 90; // Começa do topo
+                const angle = (index * (360 / buttonsConfig.length)) - 90;
                 const rad = angle * (Math.PI / 180);
-                const x = centerX + radius * Math.cos(rad) - 25; // -25 é metade do tamanho do botão
+                const x = centerX + radius * Math.cos(rad) - 25;
                 const y = centerY + radius * Math.sin(rad) - 25;
 
                 el.style.left = `${x}px`;
                 el.style.top = `${y}px`;
                 
                 el.onclick = () => {
-                    alert(`Função: ${btn.label}`);
                     speak(btn.label);
+                    // Feedback visual rápido
+                    el.style.background = '#fff';
+                    setTimeout(() => el.style.background = '', 100);
                 };
 
                 radar.appendChild(el);
             });
         }
 
-        // --- Lógica de Sensores ---
         async function startSensors() {
-            if (!('Magnetometer' in window)) {
-                alert("Seu navegador não suporta a API de Magnetômetro. Tente o Chrome Android atualizado.");
-                return;
-            }
+            // Tenta usar a API moderna primeiro
+            if ('Magnetometer' in window) {
+                try {
+                    magnetometer = new Magnetometer({ frequency: 60 });
+                    
+                    magnetometer.addEventListener('reading', () => {
+                        if (!isCalibrated) {
+                            baseX = magnetometer.x;
+                            baseY = magnetometer.y;
+                            baseZ = magnetometer.z;
+                            isCalibrated = true;
+                            statusText.innerText = "● Magnetômetro Ativo";
+                            statusText.style.color = "var(--accent)";
+                            overlay.style.display = 'none';
+                        }
+                        processReadings(magnetometer.x, magnetometer.y, magnetometer.z);
+                    });
 
-            try {
-                // Inicia Magnetômetro
-                magnetometer = new Magnetometer({ frequency: 60 });
-                
-                magnetometer.addEventListener('reading', () => {
-                    if (!isCalibrated) {
-                        // Primeira leitura define a base
-                        baseX = magnetometer.x;
-                        baseY = magnetometer.y;
-                        baseZ = magnetometer.z;
-                        isCalibrated = true;
-                        statusText.innerText = "● Monitorando";
-                        statusText.style.color = "var(--accent)";
-                        overlay.style.display = 'none';
-                    }
-                    processReadings();
-                });
+                    magnetometer.addEventListener('error', (event) => {
+                        console.warn("Erro no Magnetômetro, tentando fallback...", event.error);
+                        startFallback();
+                    });
 
-                magnetometer.addEventListener('error', (event) => {
-                    console.error(event.error);
-                    statusText.innerText = "Erro: " + event.error.message;
-                });
+                    magnetometer.start();
+                    statusText.innerText = "Iniciando sensor...";
 
-                magnetometer.start();
-                statusText.innerText = "Calibrando...";
-
-            } catch (err) {
-                statusText.innerText = "Permissão negada ou erro ao iniciar.";
-                console.error(err);
+                } catch (err) {
+                    console.warn("Falha ao iniciar Magnetômetro, tentando fallback...", err);
+                    startFallback();
+                }
+            } else {
+                startFallback();
             }
         }
 
-        function processReadings() {
-            // Calcula vetor diferença
-            const dx = magnetometer.x - baseX;
-            const dy = magnetometer.y - baseY;
-            const dz = magnetometer.z - baseZ;
-
-            // Intensidade total (magnitude)
-            const rawIntensity = Math.sqrt(dx*dx + dy*dy + dz*dz);
+        function startFallback() {
+            useFallback = true;
+            statusText.innerText = "● Modo Compatibilidade (Orientação)";
+            statusText.style.color = "var(--warn)";
+            overlay.style.display = 'none';
             
-            // Aplica sensibilidade e limite (deadzone)
-            let adjustedIntensity = (rawIntensity * sensitivity) - 5; 
+            // Pede permissão para iOS 13+ (opcional, mas boa prática)
+            if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                DeviceOrientationEvent.requestPermission()
+                    .then(response => {
+                        if (response === 'granted') {
+                            window.addEventListener('deviceorientation', handleOrientation);
+                        } else {
+                            alert('Permissão de orientação negada.');
+                        }
+                    })
+                    .catch(console.error);
+            } else {
+                window.addEventListener('deviceorientation', handleOrientation);
+            }
+        }
+
+        function handleOrientation(event) {
+            if (!isCalibrated) {
+                // Calibra com os valores iniciais
+                baseX = event.beta || 0; // Inclinação frente/trás
+                baseY = event.gamma || 0; // Inclinação esquerda/direita
+                baseZ = event.alpha || 0; // Direção bússola
+                isCalibrated = true;
+            }
+            // Simula leitura baseada na mudança de ângulo
+            processReadings(event.beta, event.gamma, event.alpha);
+        }
+
+        function processReadings(x, y, z) {
+            if (!x && !y && !z) return;
+
+            const dx = x - baseX;
+            const dy = y - baseY;
+            const dz = z - baseZ;
+
+            // No modo fallback, a intensidade é calculada diferente
+            let rawIntensity;
+            if (useFallback) {
+                // Fallback é menos preciso para "metais", serve mais para movimento
+                rawIntensity = Math.sqrt(dx*dx + dy*dy) * 2; 
+            } else {
+                rawIntensity = Math.sqrt(dx*dx + dy*dy + dz*dz);
+            }
+
+            let adjustedIntensity = (rawIntensity * sensitivity) - 2; 
             if (adjustedIntensity < 0) adjustedIntensity = 0;
             if (adjustedIntensity > 100) adjustedIntensity = 100;
 
             currentIntensity = adjustedIntensity;
-
-            // Atualiza UI
             updateCursor(dx, dy, adjustedIntensity);
-            checkButtonHover(dx, dy);
         }
 
         function updateCursor(dx, dy, intensity) {
-            // Mapeia direção para pixels (limitado ao raio do radar)
             const maxOffset = 130;
-            
-            // Inverte sinais se necessário para alinhar com a tela
             let moveX = dx * 2 * sensitivity; 
             let moveY = dy * 2 * sensitivity;
 
-            // Limita o círculo
             const dist = Math.sqrt(moveX*moveX + moveY*moveY);
             if (dist > maxOffset) {
                 const ratio = maxOffset / dist;
@@ -357,7 +374,6 @@
 
             cursor.style.transform = `translate(calc(-50% + ${moveX}px), calc(-50% + ${moveY}px))`;
             
-            // Cor do cursor baseada na intensidade
             let color = 'var(--accent)';
             if (intensity > 30) color = 'var(--warn)';
             if (intensity > 60) color = 'var(--danger)';
@@ -370,40 +386,11 @@
             intensityDisplay.style.color = color;
         }
 
-        function checkButtonHover(dx, dy) {
-            // Lógica simples para destacar o botão mais próximo da direção do campo magnético
-            const angleRad = Math.atan2(dy, dx);
-            let angleDeg = angleRad * (180 / Math.PI);
-            if (angleDeg < 0) angleDeg += 360;
-            
-            // Ajuste porque o topo é -90 no CSS mas 0/360 no math padrão pode variar
-            // Vamos simplificar: cada botão ocupa 45 graus (360 / 8)
-            const segment = 360 / buttonsConfig.length;
-            
-            // Encontra índice aproximado
-            // Nota: Esta é uma aproximação visual baseada no vetor magnético
-            let index = Math.round((angleDeg + 90) / segment) % buttonsConfig.length;
-            if (index < 0) index += buttonsConfig.length;
-
-            const btns = document.querySelectorAll('.ring-btn');
-            btns.forEach(b => b.classList.remove('active'));
-            
-            if (currentIntensity > 15 && btns[index]) {
-                btns[index].classList.add('active');
-            }
-        }
-
-        // --- Utilitários ---
         btnCalibrate.onclick = () => {
-            if (magnetometer) {
-                baseX = magnetometer.x;
-                baseY = magnetometer.y;
-                baseZ = magnetometer.z;
-                speak("Base recalibrada");
-                // Feedback visual
-                radar.style.borderColor = '#fff';
-                setTimeout(() => radar.style.borderColor = '', 200);
-            }
+            isCalibrated = false; // Força recalibração na próxima leitura
+            speak("Base recalibrada");
+            radar.style.borderColor = '#fff';
+            setTimeout(() => radar.style.borderColor = '', 200);
         };
 
         sensSlider.oninput = (e) => {
@@ -418,9 +405,7 @@
             }
         }
 
-        // Inicia
         initButtons();
-
     </script>
 </body>
 </html>
