@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta http-equiv="Permissions-Policy" content="magnetometer=(self), accelerometer=(self)">
-    <title>Detector de Metais Pro</title>
+    <title>Detector de Metais - Modo Bússola</title>
     <style>
         :root {
             --bg: #05070b;
@@ -71,7 +70,7 @@
 </head>
 <body>
 
-    <header><h1>◈ DETECTOR PRO</h1></header>
+    <header><h1>◈ DETECTOR BÚSSOLA</h1></header>
 
     <main>
         <div id="radar-container">
@@ -83,18 +82,18 @@
     <div class="controls">
         <div class="info-display" id="intensity-val">0 µT</div>
         <div class="sub-info" id="sensor-type">Sensor: Aguardando...</div>
-        <button class="action-btn" onclick="startSensors()">ATIVAR SENSOR BRUTO</button>
+        <button class="action-btn" onclick="requestAccess()">LIBERAR SENSORES</button>
     </div>
 
     <div id="permission-overlay">
-        <h2 style="color: var(--accent)">Modo Detector</h2>
-        <p>Este modo usa o sensor não-calibrado para maior sensibilidade.</p>
-        <button class="action-btn" onclick="startSensors()">INICIAR</button>
+        <h2 style="color: var(--accent)">Modo Bússola</h2>
+        <p>Para detectar metais, precisamos acessar a orientação do dispositivo.</p>
+        <button class="action-btn" onclick="requestAccess()">INICIAR</button>
     </div>
 
     <script>
-        let magSensor;
-        let baseIntensity = 0;
+        let baseAlpha = 0;
+        let isCalibrated = false;
         const cursor = document.getElementById('cursor');
         const radar = document.getElementById('radar-container');
         const intensityDisplay = document.getElementById('intensity-val');
@@ -114,62 +113,59 @@
             document.getElementById('radar-container').appendChild(el);
         });
 
-        async function startSensors() {
-            // Tenta primeiro o Uncalibrated (mais sensível)
-            if ('UncalibratedMagnetometer' in window) {
+        async function requestAccess() {
+            // Tenta usar a API de Orientação (que acessa a bússola/magnetômetro internamente)
+            if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
                 try {
-                    magSensor = new UncalibratedMagnetometer({ frequency: 60 });
-                    sensorTypeDisplay.innerText = "Sensor: Não-Calibrado (Alta Sensibilidade)";
-                } catch(e) { console.log("Falha no Uncalibrated"); }
-            } 
-            
-            // Se falhar, usa o normal
-            if (!magSensor && 'Magnetometer' in window) {
-                magSensor = new Magnetometer({ frequency: 60 });
-                sensorTypeDisplay.innerText = "Sensor: Padrão (Filtrado)";
-            }
-
-            if (magSensor) {
-                magSensor.addEventListener('reading', () => {
-                    overlay.style.display = 'none';
-                    
-                    // Pega os valores. Uncalibrated tem x,y,z e biasX,Y,Z
-                    let x = magSensor.x;
-                    let y = magSensor.y;
-                    let z = magSensor.z;
-
-                    // Calcula a magnitude total do campo magnético
-                    const totalField = Math.sqrt(x*x + y*y + z*z);
-
-                    // Se for a primeira leitura, define como base (campo da Terra)
-                    if (baseIntensity === 0) {
-                        baseIntensity = totalField;
+                    const permission = await DeviceOrientationEvent.requestPermission();
+                    if (permission === 'granted') {
+                        startDetection();
+                    } else {
+                        alert('Permissão negada.');
                     }
-
-                    // A diferença entre o atual e a base é o "metal"
-                    let anomaly = Math.abs(totalField - baseIntensity);
-                    
-                    // Multiplicador para visualização
-                    let displayVal = Math.round(anomaly * 10); 
-                    if (displayVal > 100) displayVal = 100;
-
-                    updateUI(displayVal, anomaly);
-                });
-
-                magSensor.addEventListener('error', (e) => {
-                    alert("Erro no sensor: " + e.error.message);
-                });
-
-                magSensor.start();
+                } catch (error) {
+                    console.error(error);
+                    // Fallback para dispositivos que não pedem permissão formalmente
+                    startDetection();
+                }
             } else {
-                alert("Seu navegador não suporta sensores magnéticos.");
+                // Dispositivos mais antigos ou não-iOS
+                startDetection();
             }
         }
 
-        function updateUI(val, rawAnomaly) {
-            intensityDisplay.innerText = `${val}%`;
+        function startDetection() {
+            overlay.style.display = 'none';
+            sensorTypeDisplay.innerText = "Sensor: Bússola Interna (Alpha)";
+            window.addEventListener('deviceorientation', handleOrientation);
+        }
+
+        function handleOrientation(event) {
+            // Alpha é a direção da bússola (0 a 360 graus)
+            // É o valor mais sensível a interferências magnéticas
+            if (event.alpha === null) return;
+
+            if (!isCalibrated) {
+                baseAlpha = event.alpha;
+                isCalibrated = true;
+            }
+
+            // Calcula a diferença em relação à base
+            let delta = Math.abs(event.alpha - baseAlpha);
             
-            // Lógica de cor
+            // Ajuste para o caso de passar de 360 para 0
+            if (delta > 180) delta = 360 - delta;
+
+            // Multiplicador de sensibilidade
+            let intensity = delta * 2.5; 
+            if (intensity > 100) intensity = 100;
+
+            updateUI(intensity);
+        }
+
+        function updateUI(val) {
+            intensityDisplay.innerText = `${Math.round(val)}%`;
+            
             let color = 'var(--accent)';
             if (val > 20) color = 'var(--warn)';
             if (val > 50) color = 'var(--danger)';
@@ -179,7 +175,7 @@
             cursor.style.boxShadow = `0 0 ${20 + val/2}px ${color}`;
             radar.style.borderColor = val > 50 ? 'var(--danger)' : 'var(--border)';
 
-            // Simula movimento do cursor baseado na intensidade (vibração visual)
+            // Efeito de vibração no cursor
             if (val > 10) {
                 const jitter = (Math.random() - 0.5) * (val / 2);
                 cursor.style.transform = `translate(calc(-50% + ${jitter}px), calc(-50% + ${jitter}px))`;
@@ -187,7 +183,6 @@
                 cursor.style.transform = `translate(-50%, -50%)`;
             }
 
-            // Destaca botões se estiver forte
             const allBtns = document.querySelectorAll('.ring-btn');
             if (val > 40) {
                 allBtns[Math.floor(Math.random() * allBtns.length)].classList.add('active');
