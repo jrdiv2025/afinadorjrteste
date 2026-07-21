@@ -3,11 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    
-    <!-- CRUCIAL PARA GITHUB PAGES: Permite o uso de sensores -->
     <meta http-equiv="Permissions-Policy" content="magnetometer=(self), accelerometer=(self)">
-    
-    <title>Detector de Metais Web</title>
+    <title>Detector de Metais Pro</title>
     <style>
         :root {
             --bg: #05070b;
@@ -17,395 +14,187 @@
             --warn: #ffb300;
             --danger: #ff3347;
             --text: #b8cce8;
-            --dim: #4d6185;
         }
-
         body {
             background-color: var(--bg);
             color: var(--text);
-            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-            margin: 0;
-            padding: 0;
-            height: 100vh;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            overflow: hidden;
-            touch-action: none;
+            font-family: sans-serif;
+            margin: 0; height: 100vh;
+            display: flex; flex-direction: column; align-items: center;
+            overflow: hidden; touch-action: none;
         }
-
-        header {
-            width: 100%;
-            padding: 15px;
-            text-align: center;
-            border-bottom: 1px solid var(--border);
-            background: rgba(14, 18, 29, 0.9);
-            z-index: 20;
-        }
-        h1 { margin: 0; font-size: 1.2rem; color: var(--accent); letter-spacing: 1px; }
-        .status-bar { font-size: 0.8rem; color: var(--dim); margin-top: 5px; }
-
-        main {
-            flex: 1;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            position: relative;
-            width: 100%;
-        }
-
+        header { width: 100%; padding: 15px; text-align: center; border-bottom: 1px solid var(--border); }
+        h1 { margin: 0; font-size: 1.2rem; color: var(--accent); }
+        
+        main { flex: 1; display: flex; justify-content: center; align-items: center; position: relative; width: 100%; }
+        
         #radar-container {
-            position: relative;
-            width: 320px;
-            height: 320px;
+            position: relative; width: 320px; height: 320px;
             border-radius: 50%;
             background: radial-gradient(circle, #1a2236 0%, #05070b 70%);
             border: 2px solid var(--border);
             box-shadow: 0 0 30px rgba(0, 209, 133, 0.05);
-            transition: border-color 0.3s;
         }
-
-        .ring {
-            position: absolute;
-            top: 50%; left: 50%;
-            transform: translate(-50%, -50%);
-            border-radius: 50%;
-            border: 1px solid rgba(33, 51, 84, 0.5);
-        }
-        .r1 { width: 25%; height: 25%; }
-        .r2 { width: 50%; height: 50%; }
-        .r3 { width: 75%; height: 75%; }
-
-        #cursor {
-            position: absolute;
-            top: 50%; left: 50%;
-            width: 12px; height: 12px;
-            background-color: var(--accent);
-            border-radius: 50%;
-            transform: translate(-50%, -50%);
-            box-shadow: 0 0 10px var(--accent);
-            transition: background-color 0.2s;
-            z-index: 10;
-        }
+        .ring { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); border-radius: 50%; border: 1px solid rgba(33, 51, 84, 0.5); }
+        .r1 { width: 25%; height: 25%; } .r2 { width: 50%; height: 50%; } .r3 { width: 75%; height: 75%; }
         
-        #cursor::after {
-            content: '';
-            position: absolute;
-            top: 50%; left: 50%;
-            width: 40px; height: 40px;
-            border: 1px solid rgba(255,255,255,0.3);
-            border-radius: 50%;
-            transform: translate(-50%, -50%);
+        #cursor {
+            position: absolute; top: 50%; left: 50%;
+            width: 14px; height: 14px; background-color: var(--accent);
+            border-radius: 50%; transform: translate(-50%, -50%);
+            box-shadow: 0 0 15px var(--accent); z-index: 10;
         }
 
         .ring-btn {
-            position: absolute;
-            width: 50px; height: 50px;
-            background: var(--panel);
-            border: 1px solid var(--border);
-            border-radius: 50%;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            font-size: 1.2rem;
-            color: var(--text);
-            cursor: pointer;
-            transition: all 0.2s;
-            z-index: 5;
-            user-select: none;
+            position: absolute; width: 50px; height: 50px;
+            background: var(--panel); border: 1px solid var(--border);
+            border-radius: 50%; display: flex; justify-content: center; align-items: center;
+            font-size: 1.2rem; color: var(--text); cursor: pointer; z-index: 5;
         }
-        .ring-btn.active {
-            background: var(--accent);
-            color: #000;
-            box-shadow: 0 0 15px var(--accent);
-            transform: scale(1.1);
-        }
+        .ring-btn.active { background: var(--accent); color: #000; box-shadow: 0 0 15px var(--accent); }
 
-        .controls {
-            width: 100%;
-            padding: 20px;
-            background: var(--panel);
-            border-top: 1px solid var(--border);
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-            box-sizing: border-box;
-            z-index: 20;
-        }
-
-        .info-display {
-            text-align: center;
-            font-size: 1.5rem;
-            font-weight: bold;
-            color: var(--accent);
-        }
-
-        button.action-btn {
-            background: var(--accent);
-            color: #000;
-            border: none;
-            padding: 12px;
-            border-radius: 8px;
-            font-weight: bold;
-            font-size: 1rem;
-            cursor: pointer;
-            text-transform: uppercase;
-        }
-        button.action-btn:active { opacity: 0.8; }
+        .controls { width: 100%; padding: 20px; background: var(--panel); border-top: 1px solid var(--border); text-align: center; }
+        .info-display { font-size: 2rem; font-weight: bold; color: var(--accent); margin-bottom: 10px; }
+        .sub-info { font-size: 0.9rem; color: var(--dim); margin-bottom: 15px; }
         
-        .settings {
-            display: flex;
-            justify-content: space-between;
-            font-size: 0.8rem;
-            color: var(--dim);
+        button.action-btn {
+            background: var(--accent); color: #000; border: none;
+            padding: 12px 30px; border-radius: 8px; font-weight: bold; font-size: 1rem;
         }
 
         #permission-overlay {
-            position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.95);
-            z-index: 100;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            text-align: center;
-            padding: 20px;
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.95); z-index: 100;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
         }
-        #permission-overlay p { max-width: 300px; margin-bottom: 20px; line-height: 1.5; }
-        .warning-text { color: var(--warn); font-size: 0.9rem; margin-top: 10px; }
-
     </style>
 </head>
 <body>
 
-    <header>
-        <h1>◈ DETECTOR WEB</h1>
-        <div class="status-bar" id="sensor-status">Aguardando sensores...</div>
-    </header>
+    <header><h1>◈ DETECTOR PRO</h1></header>
 
     <main>
         <div id="radar-container">
-            <div class="ring r1"></div>
-            <div class="ring r2"></div>
-            <div class="ring r3"></div>
+            <div class="ring r1"></div><div class="ring r2"></div><div class="ring r3"></div>
             <div id="cursor"></div>
         </div>
     </main>
 
     <div class="controls">
         <div class="info-display" id="intensity-val">0 µT</div>
-        <div class="settings">
-            <span>Sensibilidade: <input type="range" id="sens-slider" min="1" max="10" value="3"></span>
-        </div>
-        <button class="action-btn" id="btn-calibrate">Recalibrar Base</button>
+        <div class="sub-info" id="sensor-type">Sensor: Aguardando...</div>
+        <button class="action-btn" onclick="startSensors()">ATIVAR SENSOR BRUTO</button>
     </div>
 
     <div id="permission-overlay">
-        <h2 style="color: var(--accent)">Atenção</h2>
-        <p>Para detectar metais, este app precisa acessar os sensores do seu celular.</p>
-        <button class="action-btn" onclick="startSensors()">ATIVAR SENSOR</button>
-        <p class="warning-text">Nota: Certifique-se de estar usando HTTPS (GitHub Pages)</p>
+        <h2 style="color: var(--accent)">Modo Detector</h2>
+        <p>Este modo usa o sensor não-calibrado para maior sensibilidade.</p>
+        <button class="action-btn" onclick="startSensors()">INICIAR</button>
     </div>
 
     <script>
-        const buttonsConfig = [
-            { icon: "⚙", label: "Config" },
-            { icon: "📡", label: "Teste" },
-            { icon: "💾", label: "Salvar" },
-            { icon: "📊", label: "Dados" },
-            { icon: "🔍", label: "Buscar" },
-            { icon: "⚡", label: "Energia" },
-            { icon: "🔄", label: "Reset" },
-            { icon: "ℹ", label: "Sobre" }
-        ];
-
-        let magnetometer;
-        let isRunning = false;
-        let baseX = 0, baseY = 0, baseZ = 0;
-        let isCalibrated = false;
-        let currentIntensity = 0;
-        let sensitivity = 3.0;
-        let useFallback = false; // Se true, usa DeviceOrientation
-
+        let magSensor;
+        let baseIntensity = 0;
         const cursor = document.getElementById('cursor');
         const radar = document.getElementById('radar-container');
         const intensityDisplay = document.getElementById('intensity-val');
-        const statusText = document.getElementById('sensor-status');
+        const sensorTypeDisplay = document.getElementById('sensor-type');
         const overlay = document.getElementById('permission-overlay');
-        const btnCalibrate = document.getElementById('btn-calibrate');
-        const sensSlider = document.getElementById('sens-slider');
 
-        function initButtons() {
-            const radius = 140;
-            const centerX = 160;
-            const centerY = 160;
-
-            buttonsConfig.forEach((btn, index) => {
-                const el = document.createElement('div');
-                el.className = 'ring-btn';
-                el.innerHTML = btn.icon;
-                el.title = btn.label;
-                
-                const angle = (index * (360 / buttonsConfig.length)) - 90;
-                const rad = angle * (Math.PI / 180);
-                const x = centerX + radius * Math.cos(rad) - 25;
-                const y = centerY + radius * Math.sin(rad) - 25;
-
-                el.style.left = `${x}px`;
-                el.style.top = `${y}px`;
-                
-                el.onclick = () => {
-                    speak(btn.label);
-                    // Feedback visual rápido
-                    el.style.background = '#fff';
-                    setTimeout(() => el.style.background = '', 100);
-                };
-
-                radar.appendChild(el);
-            });
-        }
+        // Cria botões decorativos
+        const btns = ["⚙","📡","💾","📊","🔍","⚡","🔄","ℹ"];
+        btns.forEach((icon, i) => {
+            const el = document.createElement('div');
+            el.className = 'ring-btn';
+            el.innerHTML = icon;
+            const angle = (i * 45) - 90;
+            const rad = angle * (Math.PI / 180);
+            el.style.left = `${160 + 140 * Math.cos(rad) - 25}px`;
+            el.style.top = `${160 + 140 * Math.sin(rad) - 25}px`;
+            document.getElementById('radar-container').appendChild(el);
+        });
 
         async function startSensors() {
-            // Tenta usar a API moderna primeiro
-            if ('Magnetometer' in window) {
+            // Tenta primeiro o Uncalibrated (mais sensível)
+            if ('UncalibratedMagnetometer' in window) {
                 try {
-                    magnetometer = new Magnetometer({ frequency: 60 });
+                    magSensor = new UncalibratedMagnetometer({ frequency: 60 });
+                    sensorTypeDisplay.innerText = "Sensor: Não-Calibrado (Alta Sensibilidade)";
+                } catch(e) { console.log("Falha no Uncalibrated"); }
+            } 
+            
+            // Se falhar, usa o normal
+            if (!magSensor && 'Magnetometer' in window) {
+                magSensor = new Magnetometer({ frequency: 60 });
+                sensorTypeDisplay.innerText = "Sensor: Padrão (Filtrado)";
+            }
+
+            if (magSensor) {
+                magSensor.addEventListener('reading', () => {
+                    overlay.style.display = 'none';
                     
-                    magnetometer.addEventListener('reading', () => {
-                        if (!isCalibrated) {
-                            baseX = magnetometer.x;
-                            baseY = magnetometer.y;
-                            baseZ = magnetometer.z;
-                            isCalibrated = true;
-                            statusText.innerText = "● Magnetômetro Ativo";
-                            statusText.style.color = "var(--accent)";
-                            overlay.style.display = 'none';
-                        }
-                        processReadings(magnetometer.x, magnetometer.y, magnetometer.z);
-                    });
+                    // Pega os valores. Uncalibrated tem x,y,z e biasX,Y,Z
+                    let x = magSensor.x;
+                    let y = magSensor.y;
+                    let z = magSensor.z;
 
-                    magnetometer.addEventListener('error', (event) => {
-                        console.warn("Erro no Magnetômetro, tentando fallback...", event.error);
-                        startFallback();
-                    });
+                    // Calcula a magnitude total do campo magnético
+                    const totalField = Math.sqrt(x*x + y*y + z*z);
 
-                    magnetometer.start();
-                    statusText.innerText = "Iniciando sensor...";
+                    // Se for a primeira leitura, define como base (campo da Terra)
+                    if (baseIntensity === 0) {
+                        baseIntensity = totalField;
+                    }
 
-                } catch (err) {
-                    console.warn("Falha ao iniciar Magnetômetro, tentando fallback...", err);
-                    startFallback();
-                }
+                    // A diferença entre o atual e a base é o "metal"
+                    let anomaly = Math.abs(totalField - baseIntensity);
+                    
+                    // Multiplicador para visualização
+                    let displayVal = Math.round(anomaly * 10); 
+                    if (displayVal > 100) displayVal = 100;
+
+                    updateUI(displayVal, anomaly);
+                });
+
+                magSensor.addEventListener('error', (e) => {
+                    alert("Erro no sensor: " + e.error.message);
+                });
+
+                magSensor.start();
             } else {
-                startFallback();
+                alert("Seu navegador não suporta sensores magnéticos.");
             }
         }
 
-        function startFallback() {
-            useFallback = true;
-            statusText.innerText = "● Modo Compatibilidade (Orientação)";
-            statusText.style.color = "var(--warn)";
-            overlay.style.display = 'none';
+        function updateUI(val, rawAnomaly) {
+            intensityDisplay.innerText = `${val}%`;
             
-            // Pede permissão para iOS 13+ (opcional, mas boa prática)
-            if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-                DeviceOrientationEvent.requestPermission()
-                    .then(response => {
-                        if (response === 'granted') {
-                            window.addEventListener('deviceorientation', handleOrientation);
-                        } else {
-                            alert('Permissão de orientação negada.');
-                        }
-                    })
-                    .catch(console.error);
-            } else {
-                window.addEventListener('deviceorientation', handleOrientation);
-            }
-        }
-
-        function handleOrientation(event) {
-            if (!isCalibrated) {
-                // Calibra com os valores iniciais
-                baseX = event.beta || 0; // Inclinação frente/trás
-                baseY = event.gamma || 0; // Inclinação esquerda/direita
-                baseZ = event.alpha || 0; // Direção bússola
-                isCalibrated = true;
-            }
-            // Simula leitura baseada na mudança de ângulo
-            processReadings(event.beta, event.gamma, event.alpha);
-        }
-
-        function processReadings(x, y, z) {
-            if (!x && !y && !z) return;
-
-            const dx = x - baseX;
-            const dy = y - baseY;
-            const dz = z - baseZ;
-
-            // No modo fallback, a intensidade é calculada diferente
-            let rawIntensity;
-            if (useFallback) {
-                // Fallback é menos preciso para "metais", serve mais para movimento
-                rawIntensity = Math.sqrt(dx*dx + dy*dy) * 2; 
-            } else {
-                rawIntensity = Math.sqrt(dx*dx + dy*dy + dz*dz);
-            }
-
-            let adjustedIntensity = (rawIntensity * sensitivity) - 2; 
-            if (adjustedIntensity < 0) adjustedIntensity = 0;
-            if (adjustedIntensity > 100) adjustedIntensity = 100;
-
-            currentIntensity = adjustedIntensity;
-            updateCursor(dx, dy, adjustedIntensity);
-        }
-
-        function updateCursor(dx, dy, intensity) {
-            const maxOffset = 130;
-            let moveX = dx * 2 * sensitivity; 
-            let moveY = dy * 2 * sensitivity;
-
-            const dist = Math.sqrt(moveX*moveX + moveY*moveY);
-            if (dist > maxOffset) {
-                const ratio = maxOffset / dist;
-                moveX *= ratio;
-                moveY *= ratio;
-            }
-
-            cursor.style.transform = `translate(calc(-50% + ${moveX}px), calc(-50% + ${moveY}px))`;
-            
+            // Lógica de cor
             let color = 'var(--accent)';
-            if (intensity > 30) color = 'var(--warn)';
-            if (intensity > 60) color = 'var(--danger)';
+            if (val > 20) color = 'var(--warn)';
+            if (val > 50) color = 'var(--danger)';
             
-            cursor.style.backgroundColor = color;
-            cursor.style.boxShadow = `0 0 ${10 + intensity/2}px ${color}`;
-            radar.style.borderColor = intensity > 50 ? 'var(--danger)' : 'var(--border)';
-
-            intensityDisplay.innerText = `${Math.round(intensity)}%`;
             intensityDisplay.style.color = color;
-        }
+            cursor.style.backgroundColor = color;
+            cursor.style.boxShadow = `0 0 ${20 + val/2}px ${color}`;
+            radar.style.borderColor = val > 50 ? 'var(--danger)' : 'var(--border)';
 
-        btnCalibrate.onclick = () => {
-            isCalibrated = false; // Força recalibração na próxima leitura
-            speak("Base recalibrada");
-            radar.style.borderColor = '#fff';
-            setTimeout(() => radar.style.borderColor = '', 200);
-        };
+            // Simula movimento do cursor baseado na intensidade (vibração visual)
+            if (val > 10) {
+                const jitter = (Math.random() - 0.5) * (val / 2);
+                cursor.style.transform = `translate(calc(-50% + ${jitter}px), calc(-50% + ${jitter}px))`;
+            } else {
+                cursor.style.transform = `translate(-50%, -50%)`;
+            }
 
-        sensSlider.oninput = (e) => {
-            sensitivity = parseFloat(e.target.value);
-        };
-
-        function speak(text) {
-            if ('speechSynthesis' in window) {
-                const utterance = new SpeechSynthesisUtterance(text);
-                utterance.lang = 'pt-BR';
-                window.speechSynthesis.speak(utterance);
+            // Destaca botões se estiver forte
+            const allBtns = document.querySelectorAll('.ring-btn');
+            if (val > 40) {
+                allBtns[Math.floor(Math.random() * allBtns.length)].classList.add('active');
+            } else {
+                allBtns.forEach(b => b.classList.remove('active'));
             }
         }
-
-        initButtons();
     </script>
 </body>
 </html>
